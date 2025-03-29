@@ -3,7 +3,7 @@
   "name": "MR Image Viewer",
   "version": "1.0.0",
   "minAppVersion": "0.15.0",
-  "description": "A DICOM MR image viewer plugin for Obsidian",
-  "author": "Your Name",
+  "description": "A MR image viewer plugin for Obsidian",
+  "author": "Neonity",
   "isDesktopOnly": false
 } 
