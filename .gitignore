@@ -1,0 +1,34 @@
+# Obsidian 相关
+.obsidian/
+
+# 构建输出
+main.js
+*.js.map
+data.json
+
+# npm 依赖
+node_modules/
+
+# 开发工具相关
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# 测试相关
+coverage/
+.nyc_output/
+
+# 临时文件
+*.log
+.hot-reload.json
+temp/
+
+# 环境配置
+.env
+.env.local
+
+# 医学图像测试数据（如有）
+*.dcm
+*.nii
+*.nii.gz 
