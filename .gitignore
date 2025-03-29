@@ -32,3 +32,6 @@ temp/
 *.dcm
 *.nii
 *.nii.gz 
+
+# 其他配置
+.specstory/
