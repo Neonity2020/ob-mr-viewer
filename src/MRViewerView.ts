@@ -28,6 +28,7 @@ interface ViewerData {
     currentPosition: number;
     filenameDisplay: HTMLElement;
     activeIndicator: HTMLElement;
+    fullscreenContainer?: HTMLElement;
 }
 
 export class MRViewerView extends ItemView {
@@ -177,6 +178,14 @@ export class MRViewerView extends ItemView {
         }
         // 清理事件监听器
         window.removeEventListener('resize', this.handleResize.bind(this));
+        
+        // 清理全屏容器
+        for (const seriesName in this.activeViewers) {
+            const viewer = this.activeViewers[seriesName];
+            if (viewer.fullscreenContainer) {
+                viewer.fullscreenContainer.remove();
+            }
+        }
     }
 
     private addStyles() {
@@ -426,6 +435,51 @@ export class MRViewerView extends ItemView {
             
             .image-container:hover .tooltip {
                 opacity: 1;
+            }
+            
+            .fullscreen-viewer {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.9);
+                z-index: 1000;
+                display: none;
+                justify-content: center;
+                align-items: center;
+                cursor: pointer;
+            }
+            
+            .fullscreen-viewer.active {
+                display: flex;
+            }
+            
+            .fullscreen-image {
+                max-width: 95%;
+                max-height: 95%;
+                object-fit: contain;
+            }
+            
+            .fullscreen-close {
+                position: absolute;
+                top: 20px;
+                right: 20px;
+                color: white;
+                font-size: 24px;
+                cursor: pointer;
+                padding: 10px;
+                background: rgba(0, 0, 0, 0.5);
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .fullscreen-close:hover {
+                background: rgba(0, 0, 0, 0.8);
             }
         `;
         document.head.appendChild(styleEl);
@@ -750,6 +804,21 @@ export class MRViewerView extends ItemView {
                 container.createEl('img', { cls: 'dicom-image inactive' })
             ];
 
+            // 初始化第一帧图像
+            if (series.frames.length > 0) {
+                const firstFrame = series.frames[0];
+                images[0].src = firstFrame.url;
+                images[0].style.opacity = '1';
+                filenameDisplay.textContent = firstFrame.name;
+            }
+
+            // 创建全屏显示容器
+            const fullscreenContainer = this.containerEl.createDiv('fullscreen-viewer');
+            const fullscreenImage = fullscreenContainer.createEl('img', { cls: 'fullscreen-image' });
+            const closeButton = fullscreenContainer.createDiv('fullscreen-close');
+            closeButton.textContent = '×';
+
+            // 将全屏容器添加到 viewer 数据中
             this.activeViewers[seriesName] = {
                 element: viewerItem,
                 container,
@@ -758,13 +827,31 @@ export class MRViewerView extends ItemView {
                 currentFrame: 0,
                 currentPosition: 0,
                 filenameDisplay,
-                activeIndicator
+                activeIndicator,
+                fullscreenContainer
             };
+
+            // 绑定双击事件
+            container.addEventListener('dblclick', () => this.handleFullscreen(seriesName));
+            
+            // 绑定关闭按钮事件
+            closeButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.closeFullscreen(seriesName);
+            });
+            
+            // 绑定全屏容器点击事件
+            fullscreenContainer.addEventListener('click', () => {
+                this.closeFullscreen(seriesName);
+            });
 
             // 绑定点击事件
             container.addEventListener('click', () => this.handleSeriesSelect(seriesName));
             container.addEventListener('wheel', (e) => this.handleWheelScroll(e, seriesName));
         }
+
+        // 显示第一帧
+        this.showFrame(0, false);
     }
 
     private async showFrame(frameIndex: number, allowLoop = false, targetSeries: string | null = null) {
@@ -1328,5 +1415,38 @@ export class MRViewerView extends ItemView {
             contrastSlider.value = '100';
             this.updateImageAdjustments();
         }
+    }
+
+    private handleFullscreen(seriesName: string) {
+        const viewer = this.activeViewers[seriesName];
+        const series = this.seriesData[seriesName];
+        
+        if (!viewer || !series || !viewer.fullscreenContainer) return;
+        
+        const currentFrame = series.frames[viewer.currentFrame];
+        if (!currentFrame) return;
+        
+        // 更新全屏图像
+        const fullscreenImage = viewer.fullscreenContainer.querySelector('.fullscreen-image') as HTMLImageElement;
+        if (fullscreenImage) {
+            fullscreenImage.src = currentFrame.url;
+        }
+        
+        // 显示全屏容器
+        viewer.fullscreenContainer.classList.add('active');
+        
+        // 禁用滚动
+        document.body.style.overflow = 'hidden';
+    }
+
+    private closeFullscreen(seriesName: string) {
+        const viewer = this.activeViewers[seriesName];
+        if (!viewer || !viewer.fullscreenContainer) return;
+        
+        // 隐藏全屏容器
+        viewer.fullscreenContainer.classList.remove('active');
+        
+        // 恢复滚动
+        document.body.style.overflow = '';
     }
 } 
