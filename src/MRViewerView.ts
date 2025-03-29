@@ -384,20 +384,16 @@ export class MRViewerView extends ItemView {
             }
             
             .filename-display {
-                background-color: rgba(0, 0, 0, 0.7);
-                color: white;
+                background-color: var(--background-secondary);
+                color: var(--text-normal);
                 padding: 5px 10px;
                 font-size: 12px;
-                position: absolute;
-                bottom: 40px;
-                left: 50%;
-                transform: translateX(-50%);
-                border-radius: 4px;
-                max-width: 90%;
+                text-align: center;
+                border-radius: 0 0 4px 4px;
+                max-width: 100%;
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
-                z-index: 3;
             }
             
             .active-series-indicator {
@@ -446,6 +442,7 @@ export class MRViewerView extends ItemView {
                 background-color: rgba(0, 0, 0, 0.9);
                 z-index: 1000;
                 display: none;
+                flex-direction: column;
                 justify-content: center;
                 align-items: center;
                 cursor: pointer;
@@ -455,10 +452,33 @@ export class MRViewerView extends ItemView {
                 display: flex;
             }
             
-            .fullscreen-image {
+            .fullscreen-image-container {
+                position: relative;
                 max-width: 95%;
-                max-height: 95%;
+                max-height: 90%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .fullscreen-image {
+                max-width: 100%;
+                max-height: calc(90vh - 40px);
                 object-fit: contain;
+            }
+            
+            .fullscreen-filename {
+                color: white;
+                padding: 10px;
+                font-size: 14px;
+                text-align: center;
+                margin-top: 10px;
+                background-color: rgba(0, 0, 0, 0.5);
+                border-radius: 4px;
+                max-width: 90%;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
             
             .fullscreen-close {
@@ -476,6 +496,7 @@ export class MRViewerView extends ItemView {
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                z-index: 1001;
             }
             
             .fullscreen-close:hover {
@@ -814,7 +835,9 @@ export class MRViewerView extends ItemView {
 
             // 创建全屏显示容器
             const fullscreenContainer = this.containerEl.createDiv('fullscreen-viewer');
-            const fullscreenImage = fullscreenContainer.createEl('img', { cls: 'fullscreen-image' });
+            const fullscreenImageContainer = fullscreenContainer.createDiv('fullscreen-image-container');
+            const fullscreenImage = fullscreenImageContainer.createEl('img', { cls: 'fullscreen-image' });
+            const fullscreenFilename = fullscreenImageContainer.createDiv('fullscreen-filename');
             const closeButton = fullscreenContainer.createDiv('fullscreen-close');
             closeButton.textContent = '×';
 
@@ -1426,10 +1449,15 @@ export class MRViewerView extends ItemView {
         const currentFrame = series.frames[viewer.currentFrame];
         if (!currentFrame) return;
         
-        // 更新全屏图像
+        // 更新全屏图像和文件名
         const fullscreenImage = viewer.fullscreenContainer.querySelector('.fullscreen-image') as HTMLImageElement;
+        const fullscreenFilename = viewer.fullscreenContainer.querySelector('.fullscreen-filename') as HTMLElement;
+        
         if (fullscreenImage) {
             fullscreenImage.src = currentFrame.url;
+        }
+        if (fullscreenFilename) {
+            fullscreenFilename.textContent = currentFrame.name;
         }
         
         // 显示全屏容器
