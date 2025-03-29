@@ -1,6 +1,9 @@
 # Obsidian 相关
 .obsidian/
 
+# SpecStory 相关
+.specstory/
+
 # 构建输出
 main.js
 *.js.map
@@ -28,10 +31,7 @@ temp/
 .env
 .env.local
 
-# 医学图像测试数据（如有）
+# 医学图像测试数据
 *.dcm
 *.nii
 *.nii.gz 
-
-# 其他配置
-.specstory/
