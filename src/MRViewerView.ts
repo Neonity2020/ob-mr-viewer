@@ -413,7 +413,7 @@ export class MRViewerView extends ItemView {
                 display: block;
             }
             
-            .tooltip {
+            .mr-viewer-tooltip {
                 position: absolute;
                 bottom: 10px;
                 left: 50%;
@@ -429,7 +429,7 @@ export class MRViewerView extends ItemView {
                 z-index: 3;
             }
             
-            .image-container:hover .tooltip {
+            .image-container:hover .mr-viewer-tooltip {
                 opacity: 1;
             }
             
@@ -965,7 +965,7 @@ export class MRViewerView extends ItemView {
             viewer.filenameDisplay.textContent = frameObj.name;
             
             // 更新工具提示
-            const tooltip = viewer.container.querySelector('.tooltip');
+            const tooltip = viewer.container.querySelector('.mr-viewer-tooltip');
             if (tooltip) {
                 tooltip.textContent = `帧: ${displayFrameIndex + 1}/${series.frames.length} | 位置: ${viewer.currentPosition.toFixed(1)}mm`;
             }
