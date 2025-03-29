@@ -1,6 +1,8 @@
 # Obsidian MR Viewer Plugin
 ## 一款便于在OB中边记笔记边看图像的MR图像浏览器
 
+![showcase](./showcase-ob-mr-viewer.jpg)
+
 开发中……
 
 已实现的功能：
