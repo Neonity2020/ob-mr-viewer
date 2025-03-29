@@ -10,3 +10,10 @@
 - 调整亮度、对比度
 - 同步帧索引
 - 流畅的滚轮翻页图像浏览性能优化
+
+使用方法（开发测试使用）
+- 将文件下载到OB plugins文件夹
+- 终端运行`cd ob-mr-viewer`
+- 安装依赖`npm install`
+- 运行开发服务器`npm run dev`
+- 在OB中使用`MR-Viewer`插件
