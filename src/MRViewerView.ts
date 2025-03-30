@@ -49,6 +49,7 @@ export class MRViewerView extends ItemView {
     private activeSeries: string | null = null;
     private lastWheelTime = 0;
     private wheelDelta = 0;
+    private isViewCreated = false;
     private positionMap: {
         positions: number[];
         indexMap: { [key: number]: number };
@@ -71,7 +72,20 @@ export class MRViewerView extends ItemView {
     }
 
     async onOpen() {
+        // 获取容器引用
         this.container = this.containerEl.children[1] as HTMLElement;
+        
+        // 如果视图未创建，则创建视图
+        if (!this.isViewCreated) {
+            await this.createView();
+        } else {
+            // 如果视图已创建但需要重新显示数据
+            await this.reloadView();
+        }
+    }
+
+    private async createView() {
+        // 清空容器
         this.container.empty();
         this.container.addClass('mr-viewer-container');
 
@@ -83,6 +97,52 @@ export class MRViewerView extends ItemView {
         
         // 绑定事件监听器
         this.bindEventListeners();
+
+        // 标记视图已创建
+        this.isViewCreated = true;
+
+        // 如果有保存的数据，加载它
+        const savedData = this.plugin.settings.savedSeriesData;
+        if (savedData && Object.keys(savedData).length > 0) {
+            await this.loadSavedSeriesData();
+        }
+    }
+
+    private async reloadView() {
+        // 清理现有数据但保持视图结构
+        this.clearExistingData();
+
+        // 重新加载保存的数据
+        const savedData = this.plugin.settings.savedSeriesData;
+        if (savedData && Object.keys(savedData).length > 0) {
+            await this.loadSavedSeriesData();
+        }
+    }
+
+    async onClose() {
+        // 停止播放
+        if (this.playInterval) {
+            clearInterval(this.playInterval);
+        }
+
+        // 清理事件监听器
+        window.removeEventListener('resize', this.handleResize.bind(this));
+        
+        // 清理全屏容器
+        for (const seriesName in this.activeViewers) {
+            const viewer = this.activeViewers[seriesName];
+            if (viewer.fullscreenContainer) {
+                viewer.fullscreenContainer.remove();
+            }
+        }
+
+        // 清理资源但保持视图结构
+        this.clearExistingData();
+
+        // 隐藏查看器容器
+        if (this.viewerContainer) {
+            this.viewerContainer.style.display = 'none';
+        }
     }
 
     private createLayout() {
@@ -168,23 +228,6 @@ export class MRViewerView extends ItemView {
             this.handleResize();
         } catch (error) {
             console.error('加载文件失败:', error);
-        }
-    }
-
-    async onClose() {
-        // 停止播放
-        if (this.playInterval) {
-            clearInterval(this.playInterval);
-        }
-        // 清理事件监听器
-        window.removeEventListener('resize', this.handleResize.bind(this));
-        
-        // 清理全屏容器
-        for (const seriesName in this.activeViewers) {
-            const viewer = this.activeViewers[seriesName];
-            if (viewer.fullscreenContainer) {
-                viewer.fullscreenContainer.remove();
-            }
         }
     }
 
@@ -662,6 +705,9 @@ export class MRViewerView extends ItemView {
             await this.processSeriesFiles(seriesName, seriesGroups[seriesName]);
         }
 
+        // 保存序列数据
+        await this.saveSeriesData();
+
         // 显示查看器
         this.viewerContainer.style.display = 'block';
         
@@ -698,13 +744,11 @@ export class MRViewerView extends ItemView {
     private async processSeriesFiles(seriesName: string, files: File[]) {
         // 提取帧号并排序
         const framesWithNumbers = files.map(file => {
-            // 提取文件名中的数字部分
-            const match = file.name.match(/(\d+)(?!.*\d)/); // 匹配最后一个数字
+            const match = file.name.match(/(\d+)(?!.*\d)/);
             const frameNumber = match ? parseInt(match[1]) : 0;
             return { file, frameNumber };
         });
 
-        // 按帧号排序
         framesWithNumbers.sort((a, b) => a.frameNumber - b.frameNumber);
 
         const frames: SeriesFrame[] = [];
@@ -718,12 +762,11 @@ export class MRViewerView extends ItemView {
                 name: file.name,
                 url,
                 frameNumber: frameNumber,
-                position: frames.length * 5 // 假设层厚为5mm
+                position: frames.length * 5
             };
             frames.push(frame);
             positions.push(frame.position);
             
-            // 预加载图像
             return this.preloadImage(url);
         });
 
@@ -1476,5 +1519,176 @@ export class MRViewerView extends ItemView {
         
         // 恢复滚动
         document.body.style.overflow = '';
+    }
+
+    private async saveSeriesData() {
+        const savedData: { [key: string]: any } = {};
+        
+        for (const seriesName in this.seriesData) {
+            const series = this.seriesData[seriesName];
+            const frames = await Promise.all(series.frames.map(async (frame) => {
+                const arrayBuffer = await frame.file.arrayBuffer();
+                const base64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+                return {
+                    name: frame.name,
+                    frameNumber: frame.frameNumber,
+                    position: frame.position,
+                    data: base64Data
+                };
+            }));
+
+            savedData[seriesName] = {
+                name: series.name,
+                frames,
+                sliceThickness: series.sliceThickness,
+                sliceSpacing: series.sliceSpacing,
+                positions: series.positions
+            };
+        }
+
+        this.plugin.settings.savedSeriesData = savedData;
+        await this.plugin.saveSettings();
+    }
+
+    private async loadSavedSeriesData() {
+        const savedData = this.plugin.settings.savedSeriesData;
+        if (!savedData || Object.keys(savedData).length === 0) return;
+
+        // 清理现有数据
+        this.clearExistingData();
+
+        // 首先创建所有序列和帧的基本结构
+        for (const seriesName in savedData) {
+            const series = savedData[seriesName];
+            const frames: SeriesFrame[] = [];
+
+            for (const frame of series.frames) {
+                try {
+                    const binaryString = atob(frame.data);
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    const blob = new Blob([bytes], { type: 'image/jpeg' });
+                    const file = new File([blob], frame.name, { type: 'image/jpeg' });
+                    const url = URL.createObjectURL(blob);
+
+                    frames.push({
+                        file,
+                        name: frame.name,
+                        url,
+                        frameNumber: frame.frameNumber,
+                        position: frame.position
+                    });
+
+                    // 创建新的图像对象并预加载
+                    const img = new Image();
+                    img.decoding = 'async';
+                    img.loading = 'eager';
+                    img.src = url;
+                    this.imageCache[url] = img;
+
+                } catch (error) {
+                    console.error('Error loading frame:', error);
+                    continue;
+                }
+            }
+
+            if (frames.length > 0) {
+                this.seriesData[seriesName] = {
+                    name: series.name,
+                    frames,
+                    sliceThickness: series.sliceThickness,
+                    sliceSpacing: series.sliceSpacing,
+                    positions: series.positions
+                };
+            }
+        }
+
+        // 等待所有图像加载完成
+        const loadPromises = Object.values(this.imageCache).map(img => {
+            return new Promise<void>((resolve) => {
+                if (img.complete) {
+                    img.decode().then(() => resolve()).catch(() => resolve());
+                } else {
+                    img.onload = () => {
+                        img.decode().then(() => resolve()).catch(() => resolve());
+                    };
+                    img.onerror = () => resolve();
+                }
+            });
+        });
+
+        try {
+            await Promise.all(loadPromises);
+        } catch (error) {
+            console.error('Error loading images:', error);
+        }
+
+        // 创建位置映射
+        this.createPositionMap();
+
+        // 显示查看器
+        this.viewerContainer.style.display = 'block';
+        
+        // 创建序列查看器
+        this.createSeriesViewers();
+        
+        // 显示第一帧
+        this.showFrame(0);
+
+        // 调整大小
+        this.handleResize();
+    }
+
+    clearView() {
+        // 清理现有数据
+        this.clearExistingData();
+
+        // 隐藏查看器容器
+        if (this.viewerContainer) {
+            this.viewerContainer.style.display = 'none';
+        }
+
+        // 重置文件输入
+        if (this.fileInput) {
+            this.fileInput.value = '';
+        }
+
+        // 重置视图创建状态
+        this.isViewCreated = false;
+    }
+
+    private clearExistingData() {
+        // 清理 URL 对象和图像缓存
+        for (const seriesName in this.seriesData) {
+            const series = this.seriesData[seriesName];
+            for (const frame of series.frames) {
+                URL.revokeObjectURL(frame.url);
+            }
+        }
+
+        // 清空数据结构
+        this.seriesData = {};
+        this.activeViewers = {};
+        this.imageCache = {};
+        this.activeSeries = null;
+        this.currentFrameIndex = 0;
+        this.currentPosition = 0;
+        this.isPlaying = false;
+        this.playInterval = null;
+        this.syncEnabled = true;
+        this.syncMode = 'frame';
+        this.lastWheelTime = 0;
+        this.wheelDelta = 0;
+        this.positionMap = {
+            positions: [],
+            indexMap: {}
+        };
+
+        // 清空视图
+        if (this.multiViewer) {
+            this.multiViewer.empty();
+        }
     }
 } 

@@ -1,4 +1,4 @@
-import { App, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, TFile } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, TFile, Modal } from 'obsidian';
 import { MRViewerView, VIEW_TYPE_MR_VIEWER } from './MRViewerView';
 
 interface MRViewerSettings {
@@ -6,13 +6,28 @@ interface MRViewerSettings {
     defaultWindowWidth: number;
     defaultBrightness: number;
     defaultContrast: number;
+    savedSeriesData: {
+        [key: string]: {
+            name: string;
+            frames: {
+                name: string;
+                frameNumber: number;
+                position: number;
+                data: string; // Base64 编码的图像数据
+            }[];
+            sliceThickness: number;
+            sliceSpacing: number;
+            positions: number[];
+        };
+    };
 }
 
 const DEFAULT_SETTINGS: MRViewerSettings = {
     defaultWindowLevel: 128,
     defaultWindowWidth: 255,
     defaultBrightness: 100,
-    defaultContrast: 100
+    defaultContrast: 100,
+    savedSeriesData: {}
 }
 
 export default class MRViewerPlugin extends Plugin {
@@ -33,6 +48,15 @@ export default class MRViewerPlugin extends Plugin {
             name: '打开MR图像查看器',
             callback: () => {
                 this.activateView();
+            }
+        });
+
+        // 添加清除数据命令
+        this.addCommand({
+            id: 'clear-mr-viewer-data',
+            name: '清除MR图像查看器数据',
+            callback: () => {
+                this.clearSavedData();
             }
         });
 
@@ -106,6 +130,20 @@ export default class MRViewerPlugin extends Plugin {
     async saveSettings() {
         await this.saveData(this.settings);
     }
+
+    async clearSavedData() {
+        this.settings.savedSeriesData = {};
+        await this.saveSettings();
+        
+        // 通知所有打开的视图刷新
+        const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_MR_VIEWER);
+        for (const leaf of leaves) {
+            const view = leaf.view as MRViewerView;
+            if (view) {
+                view.clearView();
+            }
+        }
+    }
 }
 
 class MRViewerSettingTab extends PluginSettingTab {
@@ -168,6 +206,41 @@ class MRViewerSettingTab extends PluginSettingTab {
                 .onChange(async (value) => {
                     this.plugin.settings.defaultContrast = value;
                     await this.plugin.saveSettings();
+                }));
+
+        // 添加清除数据按钮
+        new Setting(containerEl)
+            .setName('清除保存的数据')
+            .setDesc('清除所有保存的MR序列数据，这将释放存储空间')
+            .addButton(button => button
+                .setButtonText('清除数据')
+                .setWarning()
+                .onClick(async () => {
+                    // 显示确认对话框
+                    const modal = new Modal(this.app);
+                    modal.titleEl.setText('确认清除数据');
+                    modal.contentEl.setText('确定要清除所有保存的MR序列数据吗？此操作不可恢复。');
+                    
+                    // 添加按钮
+                    const buttonContainer = modal.contentEl.createDiv('modal-button-container');
+                    buttonContainer.style.display = 'flex';
+                    buttonContainer.style.justifyContent = 'flex-end';
+                    buttonContainer.style.gap = '10px';
+                    buttonContainer.style.marginTop = '20px';
+                    
+                    const cancelButton = buttonContainer.createEl('button');
+                    cancelButton.setText('取消');
+                    cancelButton.onclick = () => modal.close();
+                    
+                    const confirmButton = buttonContainer.createEl('button');
+                    confirmButton.setText('确定');
+                    confirmButton.addClass('mod-warning');
+                    confirmButton.onclick = () => {
+                        this.plugin.clearSavedData();
+                        modal.close();
+                    };
+                    
+                    modal.open();
                 }));
     }
 } 
